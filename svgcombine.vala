@@ -7,7 +7,8 @@
  * @author Johannes Braun <johannes.braun@hannenz.de>
  * @version 2017-01-24
  * 
- * Dependencies: [libxmlbird](https://github.com/johanmattssonm/xmlbird/) (Ubuntu: sudo apt install libxmlbird)
+ * Dependencies: [libxmlbird](https://github.com/johanmattssonm/xmlbird/)
+ * (Ubuntu: sudo apt install libxmlbird-dev)
  *
  * Compile:
  * `$ valac -o svgcombine svgcombine.vala --pkg gio-2.0 --pkg xmlbird`
@@ -25,6 +26,8 @@ public class SVGCombine {
 	protected static string prefix = "";
 
 	protected static bool version = false;
+
+	const string svgheader = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"0\" height=\"0\" style=\"width:0;height:0;display:block\">\n";
 
 	private const GLib.OptionEntry[] options = {
 		{ "version", 'v', 0, OptionArg.NONE, ref version, "Display version number", null },
@@ -61,7 +64,7 @@ public class SVGCombine {
 
 	private bool parse_options(ref unowned string[] args) {
 		try {
-			var opt_context = new OptionContext("- SVG Combine");
+			var opt_context = new OptionContext("input-files");
 			opt_context.set_help_enabled(true);
 			opt_context.add_main_entries(options, null);
 			opt_context.parse(ref args);
@@ -96,10 +99,9 @@ public class SVGCombine {
 			return false;
 		}
 
-		string out_svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"0\" height=\"0\" style=\"width:0;height:0;display:block\">\n";
+		string out_svg = svgheader;
 
 		foreach (File file in files) {
-
 			// Open the file
 			try {
 				string svgstring;
