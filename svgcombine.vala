@@ -20,37 +20,39 @@ using B;
 public class SVGCombine {
 
 	protected List<File> files;
-
 	protected static string? outfile_path = null;
-
 	protected static string prefix = "";
-
-	protected static bool version = false;
-
-	const string svgheader = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"0\" height=\"0\" style=\"width:0;height:0;display:block\">\n";
+	protected static bool show_version = false;
+	protected static  string svgtag = """<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="0" height="0" style="width:0;height:0;display:block">\n""";
 
 	private const GLib.OptionEntry[] options = {
-		{ "version", 'v', 0, OptionArg.NONE, ref version, "Display version number", null },
+		{ "version", 'v', 0, OptionArg.NONE, ref show_version, "Display version number", null },
 		{ "output",  'o', 0, OptionArg.FILENAME, ref outfile_path, "Specify a file to write the resulting svg to. Outputs to stdout if omitted", null },
 		{ "prefix", 'p', 0, OptionArg.STRING, ref prefix, "Prefix each symbol's id with this string", null },
+		{ "svgtag", 's', 0, OptionArg.STRING, ref svgtag, "The opening SVG tag to be used" },
 		{ null }
 	};
 
+	/**
+	 * Constructor
+	 */
 	public SVGCombine(ref unowned string[] args) {
 		
+		// Parse commandline options
 		if (!parse_options(ref args)) {
 			stderr.printf("Errors. Exiting\n");
 			return;
 		}
 
-		if (version == true) {
+		if (show_version == true) {
 			stdout.printf("1.0\n");
 			return;
 		}
 
-		debug ("Using prefix: %s".printf(prefix));
-		debug ("Output to:    %s".printf(outfile_path));
+		debug("Using prefix: %s".printf(prefix));
+		debug("Output to:    %s".printf(outfile_path));
 
+		// Process remaining arguments as input files
 		foreach (string filename in args[1:args.length]) {
 			File file = File.new_for_path(filename);
 			if (file.query_exists()) {
@@ -62,6 +64,10 @@ public class SVGCombine {
 		}
 	}
 
+	
+	/**
+	 * Parse commandlinle options
+	 */
 	private bool parse_options(ref unowned string[] args) {
 		try {
 			var opt_context = new OptionContext("input-files");
@@ -76,6 +82,14 @@ public class SVGCombine {
 		return true;
 	}
 
+	/**
+	 * Generate an ID from filename
+	 *
+	 * TODO: Assert unique IDs ?
+	 *
+	 * @param string	The filename
+	 * @return string	The ID
+	 */
 	protected string filename2slug(string filename) {
 
 		string r = "";
@@ -99,7 +113,7 @@ public class SVGCombine {
 			return false;
 		}
 
-		string out_svg = svgheader;
+		string out_svg = svgtag;
 
 		foreach (File file in files) {
 			// Open the file
@@ -116,6 +130,8 @@ public class SVGCombine {
 				}
 
 				Tag root = parser.get_root_tag();
+
+				// Get viewbox attribute
 				string viewBoxAttribute = "";
 				foreach (Attribute attr in root.get_attributes()) {
 					if (attr.get_name() == "viewBox") {
@@ -124,7 +140,7 @@ public class SVGCombine {
 					}
 				}
 
-				out_svg += "<symbol id=\"%s\" viewBox=\"%s\">%s</symbol>\n".printf(id, viewBoxAttribute, root.get_content());
+				out_svg += """<symbol id="%s" viewBox="%s">%s</symbol>\n""".printf(id, viewBoxAttribute, root.get_content());
 			}
 			catch (Error e) {
 				warning(e.message);
@@ -137,15 +153,17 @@ public class SVGCombine {
 		FileOutputStream ostream;
 
 		if (outfile_path != null) {
+			// Create output file
 			try {
 				outfile = File.new_for_path(outfile_path);
 				ostream = outfile.replace(null, false, 0, null);
 			}
 			catch (Error e) {
-				warning ("Failed to create output file: %s", e.message);
+				stderr.printf ("Failed to create output file: %s", e.message);
 				return false;
 			}
 
+			// Write data (in chunks)
 			try {
 				uint8[] data = out_svg.data;
 				long written = 0;
@@ -154,7 +172,7 @@ public class SVGCombine {
 				}
 			}
 			catch (IOError e) {
-				warning ("Failed to write to output file: %s", e.message);
+				stderr.printf ("Failed to write to output file: %s", e.message);
 				return false;
 			}
 		}
