@@ -19,11 +19,17 @@ using B;
 
 public class SVGCombine {
 
-	protected List<File> files;
+
+	// Options
 	protected static string? outfile_path = null;
 	protected static string prefix = "";
 	protected static bool show_version = false;
-	protected static  string svgtag = """<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="0" height="0" style="width:0;height:0;display:block">\n""";
+	protected static  string svgtag = """<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="0" height="0" style="width:0;height:0;display:block">""";
+
+	protected List<File> files;
+	private List<string> used_ids = new List<string>();
+	protected List<string> defs;
+	protected List<string> symbols;
 
 	private const GLib.OptionEntry[] options = {
 		{ "version", 'v', 0, OptionArg.NONE, ref show_version, "Display version number", null },
@@ -85,8 +91,6 @@ public class SVGCombine {
 	/**
 	 * Generate an ID from filename
 	 *
-	 * TODO: Assert unique IDs ?
-	 *
 	 * @param string	The filename
 	 * @return string	The ID
 	 */
@@ -103,7 +107,33 @@ public class SVGCombine {
 			warning(e.message);
 		
 		}
-		return prefix + r;
+
+		// Assert unique IDs
+		int c = 2;
+		string id = r;
+		while (is_used(id)) {
+			id = "%s-%u".printf(r, c++);
+		}
+		used_ids.prepend(id);
+
+		return prefix + id;
+	}
+
+	/**
+	 * Check if a given id is already in use
+	 * 
+	 * @param string id		The id to check
+	 * @return bool
+	 */
+	private bool is_used(string id) {
+		bool is_used = false;
+		foreach (string used_id in used_ids) {
+			if (id == used_id) {
+				is_used = true;
+				break;
+			}
+		}
+		return is_used;
 	}
 
 	public bool run() {
@@ -113,7 +143,6 @@ public class SVGCombine {
 			return false;
 		}
 
-		string out_svg = svgtag;
 
 		foreach (File file in files) {
 			// Open the file
@@ -140,13 +169,37 @@ public class SVGCombine {
 					}
 				}
 
-				out_svg += """<symbol id="%s" viewBox="%s">%s</symbol>\n""".printf(id, viewBoxAttribute, root.get_content());
+				// Extract <def>s
+				// Kill metadata
+				foreach (Tag child in root) {
+					if (child.get_name() == "defs") {
+						defs.append(child.get_content());
+					}
+				}
+
+				string symbol = """<symbol id="%s" viewBox="%s">%s</symbol>""".printf(id, viewBoxAttribute, root.get_content());
+				symbols.append(symbol);
 			}
 			catch (Error e) {
-				warning(e.message);
+				warning("Error: " + e.message);
 			}
 		}
+
+
+		// Assemble output SVG
+		string out_svg = svgtag + "\n";
+		// write <def>s
+		out_svg += "<defs>\n";
+		foreach (string def in defs) {
+			out_svg += def;
+		}
+		out_svg += "</defs>\n";
+		foreach (string symbol in symbols) {
+			out_svg += symbol;
+			out_svg += "\n";
+		}
 		out_svg += "</svg>";
+
 
 		// Write output to either file or stdout
 		File outfile;
@@ -183,6 +236,9 @@ public class SVGCombine {
 	}
 
 	static int main (string[] args) {
+	
+
+		
 		
 		var app = new SVGCombine(ref args);
 		return app.run() ? 0 : -1;
